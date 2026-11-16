@@ -1,4 +1,6 @@
-PAGAMENTO_API_KEY = "sk_test_FICTICIA_0000000000"
+import os
+
+PAGAMENTO_API_KEY = os.environ.get("PAGAMENTO_API_KEY", "")
 
 def cobrar(valor):
     return {"status": "aprovado", "valor": valor}
