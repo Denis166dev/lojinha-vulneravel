@@ -5,6 +5,8 @@ from pagamento import cobrar
 
 app = Flask(__name__)
 DB = "loja.db"
+SQLITE_INT_MAX = 2**63 - 1
+QTD_MAX = 1000
 
 def conectar():
     con = sqlite3.connect(DB)
@@ -58,7 +60,9 @@ def finalizar():
                 pid, qtd = int(item["id"]), int(item["qtd"])
             except (KeyError, TypeError, ValueError):
                 return jsonify({"erro": "Item inválido"}), 400
-            if qtd < 1:
+            if not 1 <= pid <= SQLITE_INT_MAX:
+                return jsonify({"erro": "Item inválido"}), 400
+            if not 1 <= qtd <= QTD_MAX:
                 return jsonify({"erro": "Quantidade inválida"}), 400
             linha = con.execute("SELECT preco FROM produtos WHERE id = ?", (pid,)).fetchone()
             if linha is None:
