@@ -40,43 +40,44 @@ def buscar():
 
 @app.route("/finalizar", methods=["POST"])
 def finalizar():
-    dados = request.get_json(silent=True) or {}
+    dados = request.get_json(silent=True)
+    if not isinstance(dados, dict):
+        return jsonify({"erro": "Dados inválidos"}), 400
     cliente = str(dados.get("cliente_id", "")).strip()
-    itens = dados.get("itens", [])
+    itens = dados.get("itens")
     if not cliente or not isinstance(itens, list) or not itens:
         return jsonify({"erro": "Dados inválidos"}), 400
 
     con = conectar()
-    total = 0.0
-    for item in itens:
-        try:
-            pid, qtd = int(item["id"]), int(item["qtd"])
-        except (KeyError, TypeError, ValueError):
-            con.close()
-            return jsonify({"erro": "Item inválido"}), 400
-        if qtd < 1:
-            con.close()
-            return jsonify({"erro": "Quantidade inválida"}), 400
-        linha = con.execute("SELECT preco FROM produtos WHERE id = ?", (pid,)).fetchone()
-        if linha is None:
-            con.close()
-            return jsonify({"erro": "Produto inexistente"}), 400
-        total += linha["preco"] * qtd
+    try:
+        total = 0.0
+        for item in itens:
+            if not isinstance(item, dict):
+                return jsonify({"erro": "Item inválido"}), 400
+            try:
+                pid, qtd = int(item["id"]), int(item["qtd"])
+            except (KeyError, TypeError, ValueError):
+                return jsonify({"erro": "Item inválido"}), 400
+            if qtd < 1:
+                return jsonify({"erro": "Quantidade inválida"}), 400
+            linha = con.execute("SELECT preco FROM produtos WHERE id = ?", (pid,)).fetchone()
+            if linha is None:
+                return jsonify({"erro": "Produto inexistente"}), 400
+            total += linha["preco"] * qtd
 
-    if dados.get("cupom") == "PRIMEIRA10":
-        ja_usou = con.execute(
-            "SELECT 1 FROM usos_cupom WHERE cliente_id = ? AND cupom = ?",
-            (cliente, "PRIMEIRA10")).fetchone()
-        if ja_usou:
-            con.close()
-            return jsonify({"erro": "Cupom já utilizado"}), 400
-        total *= 0.9
-        con.execute("INSERT INTO usos_cupom (cliente_id, cupom) VALUES (?, ?)",
-                    (cliente, "PRIMEIRA10"))
+        if dados.get("cupom") == "PRIMEIRA10":
+            try:
+                con.execute("INSERT INTO usos_cupom (cliente_id, cupom) VALUES (?, ?)",
+                            (cliente, "PRIMEIRA10"))
+            except sqlite3.IntegrityError:
+                return jsonify({"erro": "Cupom já utilizado"}), 400
+            total *= 0.9
+
+        resultado = cobrar(round(total, 2))
         con.commit()
-
-    con.close()
-    return jsonify(cobrar(round(total, 2)))
+        return jsonify(resultado)
+    finally:
+        con.close()
 
 if __name__ == "__main__":
     iniciar_banco()
