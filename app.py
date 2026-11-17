@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from pagamento import cobrar
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -26,6 +27,23 @@ def listar():
     con.close()
     return jsonify(itens)
 
+@app.route("/buscar")
+def buscar():
+    termo = request.args.get("q", "")
+    con = conectar()
+    sql = f"SELECT * FROM produtos WHERE nome LIKE '%{termo}%'"
+    itens = [dict(l) for l in con.execute(sql)]
+    con.close()
+    return jsonify(itens)
+
+@app.route("/finalizar", methods=["POST"])
+def finalizar():
+    dados = request.get_json()
+    total = float(dados["total"])
+    if dados.get("cupom") == "PRIMEIRA10":
+        total = total * 0.9
+    return jsonify(cobrar(round(total, 2)))
+
 if __name__ == "__main__":
     iniciar_banco()
-    app.run(host="127.0.0.1", port=5000)
+    app.run(host="127.0.0.1", port=5000, debug=os.getenv("FLASK_DEBUG") == "1")
